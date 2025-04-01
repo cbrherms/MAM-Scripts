@@ -90,7 +90,7 @@ maximize_vip() {
 spend_upload() {
     for i in 100 20 5 1; do
         echo "Checking to spend ${i}GB"
-        UPLOADREQUIRED=$(expr $i \* 500 + ${POINTS_POINTS_BUFFER})
+        UPLOADREQUIRED=$(expr $i \* 500 + ${POINTS_BUFFER})
         while [ $POINTS -gt $UPLOADREQUIRED ]; do
             echo "$POINTS is more than $UPLOADREQUIRED - buying ${i}G of upload"
             NEWPOINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
