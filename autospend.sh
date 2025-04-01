@@ -22,6 +22,15 @@ TIMESTAMP=$(date +%s%3N)
 # Functions
 ###################################
 
+check_workdir_permissions() {
+    if [ ! -w "$WORKDIR" ]; then
+        echo "Error: Write permission denied for working directory '$WORKDIR'"
+        exit 1
+    else
+        echo "Working directory '$WORKDIR' is writable."
+    fi
+}
+
 check_cookie_session() {
     USER_ID=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
         https://www.myanonamouse.net/jsonLoad.php?snatch_summary | tee "${WORKDIR}/MAM.json" | jq .uid 2>/dev/null)
@@ -106,6 +115,10 @@ spend_upload() {
 echo "=============================================="
 echo "   MyAnonamouse autospend run started at $(date)"
 echo "=============================================="
+echo
+
+echo "[*] Verifying working directory permissions..."
+check_workdir_permissions
 echo
 
 echo "[*] Checking session status..."

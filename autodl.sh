@@ -16,8 +16,8 @@ DEBUG="${DEBUG:-1}"                                # For additional debugging in
 # Search Configuration
 ###################################
 SORT_CRITERIA="${SORT_CRITERIA:-dateDesc}"         # API sort option.
-MAIN_CATEGORY="${MAIN_CATEGORY:-'[14,13]'}"        # JSON array of main category IDs.
-LANGUAGES="${LANGUAGES:-'[1]'}"                    # JSON array of language IDs.
+MAIN_CATEGORY="${MAIN_CATEGORY:-[14,13]}"          # JSON array of main category IDs.
+LANGUAGES="${LANGUAGES:-[1]}"                      # JSON array of language IDs.
 SEARCH_TYPE="${SEARCH_TYPE:-fl-VIP}"               # Search type (e.g. fl-VIP, all, etc.)
 
 ###################################
@@ -54,6 +54,16 @@ declare -A candidate_torrent_info
 ###################################
 # Functions
 ###################################
+
+# check_workdir_permissions: Checks if the working directory is writable.
+check_workdir_permissions() {
+    if [ ! -w "$WORKDIR" ]; then
+        echo "Error: Write permission denied for working directory '$WORKDIR'"
+        exit 1
+    else
+        echo "Working directory '$WORKDIR' is writable."
+    fi
+}
 
 # check_cookie_session: Sets up session.
 # Also retrieves USER_ID dynamically.
@@ -349,6 +359,10 @@ download_candidate_torrents() {
 echo "=============================================="
 echo "   MyAnonamouse autodownload run started at $(date)"
 echo "=============================================="
+echo
+
+echo "[*] Verifying working directory permissions..."
+check_workdir_permissions
 echo
 
 echo "[*] Checking session status..."

@@ -12,6 +12,15 @@ COOKIE_FILE="${WORKDIR}/MAM-seedbox.cookie"        # Location of the cookie file
 # Functions
 ###################################
 
+check_workdir_permissions() {
+    if [ ! -w "$WORKDIR" ]; then
+        echo "[!] Error: Write permission denied for working directory '$WORKDIR'"
+        exit 1
+    else
+        echo "[*] Working directory '$WORKDIR' is writable."
+    fi
+}
+
 new_ip() {
     case $IPSOURCE in
         "ifconfigco")
@@ -54,6 +63,10 @@ update_mam() {
 echo "=============================================="
 echo "   MyAnonamouse seedbox API run started at $(date)"
 echo "=============================================="
+echo
+
+echo "[*] Verifying working directory permissions..."
+check_workdir_permissions
 echo
 
 if [ "$MAM_ID" = "default" ]; then
