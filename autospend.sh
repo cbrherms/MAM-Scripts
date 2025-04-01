@@ -138,12 +138,20 @@ fi
 
 if [ "x$BUY_VIP" = "x1" ]; then
     echo "[*] Maximizing VIP status..."
-    maximize_vip
+    if [ "$POINTS" -lt "$POINTS_BUFFER" ]; then
+        echo "Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
+    else
+        maximize_vip
+    fi
     echo
 fi
 
 echo "[*] Spending remaining bonus points on upload..."
-spend_upload
+if [ "$POINTS" -lt "$POINTS_BUFFER" ]; then
+    echo "Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
+else
+    spend_upload
+fi
 echo
 
 echo "=============================================="
