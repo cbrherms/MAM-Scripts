@@ -24,10 +24,10 @@ TIMESTAMP=$(date +%s%3N)
 
 check_workdir_permissions() {
     if [ ! -w "$WORKDIR" ]; then
-        echo "Error: Write permission denied for working directory '$WORKDIR'"
+        echo " => Error: Write permission denied for working directory '$WORKDIR'"
         exit 1
     else
-        echo "Working directory '$WORKDIR' is writable."
+        echo " => Working directory '$WORKDIR' is writable."
     fi
 }
 
