@@ -68,45 +68,64 @@ buy_wedge() {
     WEDGEMINS=$(expr $WEDGEHOURS \* 60 - 10)
     find "${WORKDIR}/wedge.last" -mmin -${WEDGEMINS} 2>/dev/null | grep -i wedge.last > /dev/null 2>/dev/null
     if [ $? -ne 0 ]; then
-        echo "Need to buy a wedge!"
+        echo " => Need to buy a wedge!"
         if [ $POINTS -lt 50000 ]; then
-            echo "Not enough points, aborting."
-            exit 1
+            echo " => Not enough points, skipping."
+            return
         fi
         curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "$WEDGEURL"
         touch "${WORKDIR}/wedge.last"
         get_current_points
+    else
+        echo " => Wedge already purchased in the last $WEDGEHOURS hours."
     fi
 }
 
 maximize_vip() {
+    VIPUNTIL=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID}" | jq -r .vip_until)
+    now=$(date -u +%s)
+    VIP_UNTIL_EPOCH=$(date -u -d "$VIPUNTIL" +%s 2>/dev/null)
+    
+    if [ $? -ne 0 ]; then
+        echo " => Failed to parse the date VIP expires. Proceeding with VIP purchase..."
+    else
+        DAYS_LEFT=$(( (VIP_UNTIL_EPOCH - now) / 86400 ))
+        if [ $DAYS_LEFT -gt 60 ]; then
+            echo " => VIP has $DAYS_LEFT days remaining. Skipping VIP purchase until this drops below 60 days."
+            return
+        fi
+    fi
+
     VIPRESULT=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
         ${VIPURL}${TIMESTAMP} 2>/dev/null | jq .success)
     if [ "x$VIPRESULT" != "xtrue" ]; then
-        echo "VIP purchase failed!"
+        echo " => VIP purchase failed!"
+    else
+        echo " => Purchased max VIP with points available"
+        get_current_points
     fi
 }
 
 spend_upload() {
     for i in 100 20 5 1; do
-        echo "Checking to spend ${i}GB"
         UPLOADREQUIRED=$(expr $i \* 500 + ${POINTS_BUFFER})
         while [ $POINTS -gt $UPLOADREQUIRED ]; do
-            echo "$POINTS is more than $UPLOADREQUIRED - buying ${i}G of upload"
+            echo " => Buying ${i}G of upload..."
             NEWPOINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
                 ${POINTSURL}${i}'&_='${TIMESTAMP} | jq '.seedbonus' | sed -e 's/\..*$//')
             if [ $? -ne 0 ]; then
-                echo "Spend failed - cannot see new Bonus points."
+                echo " => Spend failed - cannot see new Bonus points."
                 exit 1
             fi
             if [ $NEWPOINTS -lt $POINTS ]; then
                 POINTS=$NEWPOINTS
             else
-                echo "Points did not change - spending failed."
+                echo " => Points did not change - spending failed."
                 exit 1
             fi
         done
     done
+    get_current_points
 }
 
 ###################################
@@ -139,7 +158,7 @@ fi
 if [ "x$BUY_VIP" = "x1" ]; then
     echo "[*] Maximizing VIP status..."
     if [ "$POINTS" -lt "$POINTS_BUFFER" ]; then
-        echo "Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
+        echo " => Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
     else
         maximize_vip
     fi
@@ -148,7 +167,7 @@ fi
 
 echo "[*] Spending remaining bonus points on upload..."
 if [ "$POINTS" -lt "$POINTS_BUFFER" ]; then
-    echo "Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
+    echo " => Current points ($POINTS) are below the threshold ($POINTS_BUFFER) - skipping spending."
 else
     spend_upload
 fi
