@@ -4,13 +4,13 @@
 # Global Configuration
 ###################################
 MAM_ID="${MAM_ID:-default}"
-MAX_DOWNLOADS="${MAX_DOWNLOADS:-45}"               # Maximum torrents to download in one run.
+MAX_DOWNLOADS="${MAX_DOWNLOADS:-5}"               # Maximum torrents to download in one run.
 SET_ASIDE="${SET_ASIDE:-10}"                       # Percentage to set aside (unsat buffer).
 WORKDIR="${WORKDIR:-/config}"                      # Directory for temp files.
 TORRENT_DIR="${TORRENT_DIR:-${WORKDIR}/torrents}"  # Directory to save torrents (default WORKDIR/torrents).
 COOKIE_FILE="${WORKDIR}/MAM-autodl.cookie"         # Cookie file for authentication (not overridable).
 DRY_RUN="${DRY_RUN:-0}"                            # Set to 1 to perform a dry run.
-DEBUG="${DEBUG:-1}"                                # For additional debugging info.
+DEBUG="${DEBUG:-0}"                                # For additional debugging info.
 
 ###################################
 # Search Configuration
