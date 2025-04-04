@@ -69,24 +69,23 @@ check_workdir_permissions() {
 # Also retrieves USER_ID dynamically.
 check_cookie_session() {
     echo " => Checking existing cookie file..."
-    local endpoint="/jsonLoad.php?snatch_summary"
-    local url="${BASE_URL}${endpoint}"
+    USER_ID=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+        https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
     
-    USER_RESPONSE=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "$url" | tee /tmp/MAM.json)
-    USER_ID=$(echo "$USER_RESPONSE" | jq .uid 2>/dev/null)
-    
-    if [ "${USER_ID}x" = "x" ]; then
-        echo " => Session invalid."
-        if [ -z "$MAM_ID" ]; then
-            echo " => Please update the MAM_ID in the script."
+    if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
+        echo " => Session no longer valid"
+        if [ "$MAM_ID" = "default"  ]; then
+            echo " => Please add/update the MAM_ID value."
             exit 1
         fi
         
-        USER_RESPONSE=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" "$url" | tee /tmp/MAM.json)
-        USER_ID=$(echo "$USER_RESPONSE" | jq .uid 2>/dev/null)
+        echo " => Attempting to create a new session with MAM_ID..."
+        USER_ID=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
+            https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
         
-        if [ "${USER_ID}x" = "x" ]; then
+        if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
             echo " => Cannot create new session!"
+            echo " => Check your MAM_ID has been set correctly"
             exit 1
         else
             echo " => New Session created"
