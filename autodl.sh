@@ -309,7 +309,7 @@ download_candidate_torrents() {
         local url="${BASE_URL}${endpoint}"
         local torrent_info
         for torrent_id in "${candidate_torrents[@]}"; do
-            sleep 2
+            sleep 3
             header_file=$(mktemp)
             body_file=$(mktemp)
             cookie_header="mam_id=${MAM_ID}"
