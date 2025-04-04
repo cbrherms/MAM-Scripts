@@ -173,6 +173,9 @@ get_unsat_data() {
     unsat_limit=$(printf "%.0f" "${unsat_limit_unsat}")
     unsat_count=$(printf "%.0f" "${unsat_count_unsat}")
     unsat_left=$(echo "$unsat_limit $unsat_count $SET_ASIDE" | awk '{printf "%.0f", $1 - $2 - (($3/100)*$1)}')
+    if [ "$unsat_left" -lt 0 ]; then
+        unsat_left=0
+    fi
     echo " => You can autodownload ${unsat_left} torrents."
 }
 
