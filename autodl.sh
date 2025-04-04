@@ -58,31 +58,31 @@ declare -A candidate_torrent_info
 # check_workdir_permissions: Checks if the working directory is writable.
 check_workdir_permissions() {
     if [ ! -w "$WORKDIR" ]; then
-        echo "Error: Write permission denied for working directory '$WORKDIR'"
+        echo " => Error: Write permission denied for working directory '$WORKDIR'"
         exit 1
     else
-        echo "Working directory '$WORKDIR' is writable."
+        echo " => Working directory '$WORKDIR' is writable."
     fi
 }
 
 # check_cookie_session: Sets up session.
 # Also retrieves USER_ID dynamically.
 check_cookie_session() {
-    echo "Checking existing cookie file..."
+    echo " => Checking existing cookie file..."
     local endpoint="/jsonLoad.php?snatch_summary"
     local url="${BASE_URL}${endpoint}"
     
-    USER_RESPONSE=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "$url" | tee MAM.json)
+    USER_RESPONSE=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "$url" | tee /tmp/MAM.json)
     USER_ID=$(echo "$USER_RESPONSE" | jq .uid 2>/dev/null)
     
     if [ "${USER_ID}x" = "x" ]; then
-        echo "Session invalid."
+        echo " => Session invalid."
         if [ -z "$MAM_ID" ]; then
-            echo "Please update the MAM_ID in the script."
+            echo " => Please update the MAM_ID in the script."
             exit 1
         fi
         
-        USER_RESPONSE=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" "$url" | tee MAM.json)
+        USER_RESPONSE=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" "$url" | tee /tmp/MAM.json)
         USER_ID=$(echo "$USER_RESPONSE" | jq .uid 2>/dev/null)
         
         if [ "${USER_ID}x" = "x" ]; then
@@ -147,7 +147,7 @@ request_manager() {
     response=$(echo "$http_response" | sed '$d')
 
     if [ "$http_code" != "200" ]; then
-        echo "Error communicating with API. HTTP status code: $http_code" >&2
+        echo " => Error communicating with API. HTTP status code: $http_code" >&2
         rm "$header_file"
         exit 1
     fi
@@ -173,7 +173,7 @@ get_unsat_data() {
     unsat_limit=$(printf "%.0f" "${unsat_limit_unsat}")
     unsat_count=$(printf "%.0f" "${unsat_count_unsat}")
     unsat_left=$(echo "$unsat_limit $unsat_count $SET_ASIDE" | awk '{printf "%.0f", $1 - $2 - (($3/100)*$1)}')
-    echo "You can autodownload ${unsat_left} torrents."
+    echo " => You can autodownload ${unsat_left} torrents."
 }
 
 # check_for_non_candidate_torrent: Converts the torrent's reported size into the chosen unit (UNIT_STR), then compares it with MIN_SIZE and MAX_SIZE.
@@ -262,6 +262,10 @@ candidate_torrents_search() {
         torrent_response=$(request_manager "$url" "post" "" "$json_payload")
         found=$(echo "$torrent_response" | jq -r '.found' )
         for row in $(echo "$torrent_response" | jq -r '.data[] | @base64'); do
+            if [ "$unsat_left" -le 0 ]; then
+                echo " => Reached the limit of unsatisfied download slots."
+                break 2
+            fi
             _decode() {
                 echo "$row" | base64 --decode
             }
@@ -279,9 +283,9 @@ candidate_torrents_search() {
 
             if [ "$DEBUG" -eq 1 ]; then
                 if [ "$accepted" = "REJECTED" ]; then
-                    echo "Torrent ID: ${candidate_id} | Size: ${candidate_size} | Seeders: ${candidate_seeders} => ${accepted}: ${reject_reason}"
+                    echo " => Torrent ID: ${candidate_id} | Size: ${candidate_size} | Seeders: ${candidate_seeders} => ${accepted}: ${reject_reason}"
                 else
-                    echo "Torrent ID: ${candidate_id} | Size: ${candidate_size} | Seeders: ${candidate_seeders} => ${accepted}"
+                    echo " => Torrent ID: ${candidate_id} | Size: ${candidate_size} | Seeders: ${candidate_seeders} => ${accepted}"
                 fi
             fi
 
@@ -295,14 +299,14 @@ candidate_torrents_search() {
             break
         fi
     done
-    echo "${#candidate_torrents[@]} candidate torrents identified."
+    echo " => ${#candidate_torrents[@]} candidate torrents identified."
 }
 
 download_candidate_torrents() {
     candidate_torrents_search
     if [ "$DRY_RUN" -eq 1 ]; then
         for torrent_id in "${candidate_torrents[@]}"; do
-            echo "${BASE_URL}/t/${torrent_id}"
+            echo " => ${BASE_URL}/t/${torrent_id}"
         done
     else
         local endpoint="/tor/download.php"
@@ -326,14 +330,14 @@ download_candidate_torrents() {
                 if [ "$http_code" -eq 200 ]; then
                     break
                 else
-                    echo "Error downloading torrent ID ${torrent_id}, HTTP code: $http_code. Retrying..."
+                    echo " => Error downloading torrent ID ${torrent_id}, HTTP code: $http_code. Retrying..."
                     sleep 5
                     retry=$((retry+1))
                 fi
             done
             
             if [ "$http_code" -ne 200 ]; then
-                echo "Failed to download torrent ID ${torrent_id} after ${max_retries} attempts. Skipping..."
+                echo " => Failed to download torrent ID ${torrent_id} after ${max_retries} attempts. Skipping..."
                 rm "$header_file" "$body_file"
                 continue
             fi
@@ -347,7 +351,7 @@ download_candidate_torrents() {
             # Save downloaded file (file name cleaned by get_file_name includes removal of undesired chars)
             cat "$body_file" > "${TORRENT_DIR}${file_name}"
             torrent_info="${candidate_torrent_info[$torrent_id]}"
-            echo "Downloaded torrent ID ${torrent_id} as ${file_name} (${torrent_info})"
+            echo " => Downloaded torrent ID ${torrent_id} as ${file_name} (${torrent_info})"
             rm "$header_file" "$body_file"
         done
     fi
