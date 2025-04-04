@@ -18,12 +18,12 @@ Automatically downloads torrents from MyAnonaMouse based on defined search crite
 
 **Key Options (Environment Variables):**
 - **MAM_ID**: MyAnonaMouse session token. *(Required)*
-- **MAX_DOWNLOADS**: Maximum number of torrents to download per run. *(Default: `45`)*
+- **MAX_DOWNLOADS**: Maximum number of torrents to download per run. *(Default: `5`)*
 - **SET_ASIDE**: Percentage to reserve as a buffer. Will leave this percentage of your unsatisfied allowance available. *(Default: `10`)*
 - **WORKDIR**: Directory for temporary files. *(Default: `/config`)*
 - **TORRENT_DIR**: Directory to save torrent files. Defaults to `${WORKDIR}/torrents` (overridable).
 - **DRY_RUN**: Set to `1` to simulate downloads without saving files. *(Default: `0`)*
-- **DEBUG**: Enable additional debugging info. *(Default: `1`)*
+- **DEBUG**: Enable additional debugging info. *(Default: `0`)*
 
 **Search Options:**
 - **SORT_CRITERIA**: API sort option. *(Default: `dateDesc`)*
@@ -74,14 +74,23 @@ Monitors and updates your MyAnonaMouse seedbox session by detecting public IP ch
 
 ## Usage
 
-Each script is designed to run on a Linux shell within a Docker container or Kubernetes pod. You can override defaults by passing environment variables. For example, to run `autospend.sh` with a custom `POINTS_BUFFER`:
+Each script is designed to run on a Linux shell within a Docker container or Kubernetes pod. The official container image is available at:
+
+    ghcr.io/cbrherms/mam-scripts
+
+Images are tagged with the build date, but you can use the "rolling" tag as a drop-in for what is typically referred to as "latest."
+
+To run a script, set the environment variable `SCRIPT_NAME` to the name of the script you want to execute (for example, `autospend.sh`).
+
+For example, to run `autospend.sh` with a custom `POINTS_BUFFER`:
 
 ```bash
 docker run \
   -e MAM_ID="your_mam_id" \
   -e POINTS_BUFFER=10000 \
+  -e SCRIPT_NAME="autospend.sh" \
   -v /path/to/your/data:/config \
-  my-mam-scripts autospend.sh
+  ghcr.io/cbrherms/mam-scripts:rolling
 ```
 
 In a Kubernetes CronJob, specify environment variables in the pod spec.
