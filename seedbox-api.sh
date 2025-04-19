@@ -52,8 +52,14 @@ save_ip() {
     printf "%s" "$1" > "${WORKDIR}/MAM.ip"
 }
 
+validate_cookie() {
+    local response
+    response=$(curl -s -b "$COOKIE_FILE" "https://www.myanonamouse.net/jsonLoad.php")
+    echo "$response" | jq -e '.uid // empty' >/dev/null 2>&1
+}
+
 header() {
-    if [ -f "$COOKIE_FILE" ]; then
+    if [ -f "$COOKIE_FILE" ] && validate_cookie; then
         cat "$COOKIE_FILE"
     else
         printf "mam_id=%s" "$MAM_ID"
@@ -64,10 +70,11 @@ update_mam() {
     local ENDPOINT="https://t.myanonamouse.net/json/dynamicSeedbox.php"
     local max_retries=3
     local attempt=1
-    local success=0
+    local update_exit_code=1
+
     while [ $attempt -le $max_retries ]; do
         if curl -s -b "$(header)" -c "$COOKIE_FILE" "$ENDPOINT" | grep -q '"Success":true'; then
-            success=1
+            update_exit_code=0
             break
         else
             echo "[!] Attempt $attempt failed to update MAM session IP."
@@ -77,7 +84,7 @@ update_mam() {
         fi
         attempt=$((attempt+1))
     done
-    return $success
+    return $update_exit_code
 }
 
 ###################################
