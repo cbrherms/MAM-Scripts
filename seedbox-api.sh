@@ -22,22 +22,30 @@ check_workdir_permissions() {
 }
 
 new_ip() {
+    local ip
     case $IPSOURCE in
         "ifconfigco")
-            curl -s -4 ifconfig.co | md5sum | awk '{print "ifconfigco:" $1}'
+            ip=$(curl -s -4 ifconfig.co)
             ;;
         "mam")
-            curl -s https://www.myanonamouse.net/myip.php | md5sum | awk '{print "mam:" $1}'
+            # IP address has to be extracted from the HTML response of the page
+            ip=$(curl -s https://www.myanonamouse.net/myip.php | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
             ;;
         *)
             echo "[!] Error: Invalid IP retrieval method '$IPSOURCE'. Expected 'ifconfigco' or 'mam'."
             return 1
             ;;
     esac
+    if [ -z "$ip" ]; then
+        return 1
+    fi
+    echo "$ip"
 }
 
 old_ip() {
-    [ -f "${WORKDIR}/MAM.ip" ] && cat "${WORKDIR}/MAM.ip"
+    if [ -f "${WORKDIR}/MAM.ip" ]; then
+        cat "${WORKDIR}/MAM.ip"
+    fi
 }
 
 save_ip() {
@@ -54,7 +62,22 @@ header() {
 
 update_mam() {
     local ENDPOINT="https://t.myanonamouse.net/json/dynamicSeedbox.php"
-    curl -s -b "$(header)" -c "$COOKIE_FILE" "$ENDPOINT" | grep '"Success":true' >/dev/null
+    local max_retries=3
+    local attempt=1
+    local success=0
+    while [ $attempt -le $max_retries ]; do
+        if curl -s -b "$(header)" -c "$COOKIE_FILE" "$ENDPOINT" | grep -q '"Success":true'; then
+            success=1
+            break
+        else
+            echo "[!] Attempt $attempt failed to update MAM session IP."
+            if [ $attempt -lt $max_retries ]; then
+                sleep 5
+            fi
+        fi
+        attempt=$((attempt+1))
+    done
+    return $success
 }
 
 ###################################
@@ -74,19 +97,18 @@ if [ "$MAM_ID" = "default" ]; then
     exit 1
 fi
 
-NEW_IP="$(new_ip)"
-if [ $? -ne 0 ] || [ -z "$NEW_IP" ]; then
-    echo "[!] Error: Unable to fetch current IP."
-    exit 1
-fi
+echo "[*] Checking current IP address..."
+NEW_IP=$(new_ip) || { echo "[!] Error: Unable to fetch current IP."; exit 1; }
+OLD_IP=$(old_ip)
 
-if [ "$(old_ip)" != "$NEW_IP" ]; then
-    echo "[*] IP change detected. Updating MAM session..."
+if [ "$OLD_IP" != "$NEW_IP" ]; then
+    echo "[*] IP change detected: Old IP = $OLD_IP | New IP = $NEW_IP"
+    echo "[*] Updating MAM session..."
     if update_mam; then
         save_ip "$NEW_IP"
-        echo "[+] Success: MAM IP updated to $NEW_IP."
+        echo "[+] Success: MAM IP updated to $NEW_IP"
     else
-        echo "[!] Error: MAM IP update failed."
+        echo "[!] Error: MAM IP update failed. Exhausted retries."
         exit 1
     fi
 else
