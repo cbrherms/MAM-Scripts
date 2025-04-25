@@ -66,6 +66,25 @@ header() {
     fi
 }
 
+get_new_ip() {
+    local max_retries=3
+    local attempt=1
+    local ip=""
+    
+    while [ $attempt -le $max_retries ]; do
+        ip=$(new_ip)
+        if [ -n "$ip" ]; then
+            echo "$ip"
+            return 0
+        else
+            echo "[!] Attempt $attempt: Unable to fetch current IP. Retrying in 5 seconds..."
+            sleep 5
+        fi
+        attempt=$((attempt+1))
+    done
+    return 1
+}
+
 update_mam() {
     local ENDPOINT="https://t.myanonamouse.net/json/dynamicSeedbox.php"
     local max_retries=3
@@ -105,7 +124,7 @@ if [ "$MAM_ID" = "default" ]; then
 fi
 
 echo "[*] Checking current IP address..."
-NEW_IP=$(new_ip) || { echo "[!] Error: Unable to fetch current IP."; exit 1; }
+NEW_IP=$(get_new_ip) || { echo "[!] Error: Unable to fetch current IP after multiple attempts."; exit 1; }
 OLD_IP=$(old_ip)
 
 if [ "$OLD_IP" != "$NEW_IP" ]; then
