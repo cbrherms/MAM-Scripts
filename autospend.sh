@@ -24,7 +24,7 @@ TIMESTAMP=$(date +%s%3N)
 
 check_workdir_permissions() {
     if [ ! -w "$WORKDIR" ]; then
-        echo " => Error: Write permission denied for working directory '$WORKDIR'"
+        echo " => Error: Write permission denied for working directory '$WORKDIR'" >&2
         exit 1
     else
         echo " => Working directory '$WORKDIR' is writable."
@@ -39,7 +39,7 @@ check_cookie_session() {
     if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
         echo " => Session no longer valid"
         if [ "$MAM_ID" = "default"  ]; then
-            echo " => Please add/update the MAM_ID value."
+            echo " => Please add/update the MAM_ID value." >&2
             exit 1
         fi
         
@@ -48,8 +48,8 @@ check_cookie_session() {
             https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
         
         if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
-            echo " => Cannot create new session!"
-            echo " => Check your MAM_ID has been set correctly"
+            echo " => Cannot create new session!" >&2
+            echo " => Check your MAM_ID has been set correctly" >&2
             exit 1
         else
             echo " => New Session created"
@@ -63,7 +63,7 @@ get_current_points() {
     POINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
         https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID} | jq '.seedbonus')
     if [ $? -ne 0 ]; then
-        echo " => Failed to get number of bonus points - aborting."
+        echo " => Failed to get number of bonus points - aborting." >&2
         exit 1
     else
         echo " => Current points: $POINTS"
@@ -105,7 +105,7 @@ maximize_vip() {
     VIPRESULT=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
         ${VIPURL}${TIMESTAMP} 2>/dev/null | jq .success)
     if [ "x$VIPRESULT" != "xtrue" ]; then
-        echo " => VIP purchase failed!"
+        echo " => VIP purchase failed!" >&2
     else
         echo " => Purchased max VIP with points available"
         get_current_points
@@ -120,13 +120,13 @@ spend_upload() {
             NEWPOINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
                 ${POINTSURL}${i}'&_='${TIMESTAMP} | jq '.seedbonus' | sed -e 's/\..*$//')
             if [ $? -ne 0 ]; then
-                echo " => Spend failed - cannot see new Bonus points."
+                echo " => Spend failed - cannot see new Bonus points." >&2
                 exit 1
             fi
             if [ $NEWPOINTS -lt $POINTS ]; then
                 POINTS=$NEWPOINTS
             else
-                echo " => Points did not change - spending failed."
+                echo " => Points did not change - spending failed." >&2
                 exit 1
             fi
         done

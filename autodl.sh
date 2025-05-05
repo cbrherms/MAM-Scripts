@@ -58,7 +58,7 @@ declare -A candidate_torrent_info
 # check_workdir_permissions: Checks if the working directory is writable.
 check_workdir_permissions() {
     if [ ! -w "$WORKDIR" ]; then
-        echo " => Error: Write permission denied for working directory '$WORKDIR'"
+        echo " => Error: Write permission denied for working directory '$WORKDIR'" >&2
         exit 1
     else
         echo " => Working directory '$WORKDIR' is writable."
@@ -75,7 +75,7 @@ check_cookie_session() {
     if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
         echo " => Session no longer valid"
         if [ "$MAM_ID" = "default"  ]; then
-            echo " => Please add/update the MAM_ID value."
+            echo " => Please add/update the MAM_ID value." >&2
             exit 1
         fi
         
@@ -84,8 +84,8 @@ check_cookie_session() {
             https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
         
         if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
-            echo " => Cannot create new session!"
-            echo " => Check your MAM_ID has been set correctly"
+            echo " => Cannot create new session!" >&2
+            echo " => Check your MAM_ID has been set correctly" >&2
             exit 1
         else
             echo " => New Session created"
@@ -332,14 +332,14 @@ download_candidate_torrents() {
                 if [ "$http_code" -eq 200 ]; then
                     break
                 else
-                    echo " => Error downloading torrent ID ${torrent_id}, HTTP code: $http_code. Retrying..."
+                    echo " => Error downloading torrent ID ${torrent_id}, HTTP code: $http_code. Retrying..." >&2
                     sleep 5
                     retry=$((retry+1))
                 fi
             done
             
             if [ "$http_code" -ne 200 ]; then
-                echo " => Failed to download torrent ID ${torrent_id} after ${max_retries} attempts. Skipping..."
+                echo " => Failed to download torrent ID ${torrent_id} after ${max_retries} attempts. Skipping..." >&2
                 rm "$header_file" "$body_file"
                 continue
             fi

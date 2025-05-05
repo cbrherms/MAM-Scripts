@@ -14,7 +14,7 @@ COOKIE_FILE="${WORKDIR}/MAM-seedbox.cookie"        # Location of the cookie file
 
 check_workdir_permissions() {
     if [ ! -w "$WORKDIR" ]; then
-        echo "[!] Error: Write permission denied for working directory '$WORKDIR'"
+        echo "[!] Error: Write permission denied for working directory '$WORKDIR'" >&2
         exit 1
     else
         echo "[*] Working directory '$WORKDIR' is writable."
@@ -32,7 +32,7 @@ new_ip() {
             ip=$(curl -s https://www.myanonamouse.net/myip.php | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
             ;;
         *)
-            echo "[!] Error: Invalid IP retrieval method '$IPSOURCE'. Expected 'ifconfigco' or 'mam'."
+            echo "[!] Error: Invalid IP retrieval method '$IPSOURCE'. Expected 'ifconfigco' or 'mam'." >&2
             return 1
             ;;
     esac
@@ -77,7 +77,7 @@ get_new_ip() {
             echo "$ip"
             return 0
         else
-            echo "[!] Attempt $attempt: Unable to fetch current IP. Retrying in 5 seconds..."
+            echo "[!] Attempt $attempt: Unable to fetch current IP. Retrying in 5 seconds..." >&2
             sleep 5
         fi
         attempt=$((attempt+1))
@@ -96,7 +96,7 @@ update_mam() {
             update_exit_code=0
             break
         else
-            echo "[!] Attempt $attempt failed to update MAM session IP."
+            echo "[!] Attempt $attempt failed to update MAM session IP." >&2
             if [ $attempt -lt $max_retries ]; then
                 sleep 5
             fi
@@ -119,12 +119,12 @@ check_workdir_permissions
 echo
 
 if [ "$MAM_ID" = "default" ]; then
-    echo "[!] Error: MAM_ID not set in the script."
+    echo "[!] Error: MAM_ID not set in the script." >&2
     exit 1
 fi
 
 echo "[*] Checking current IP address..."
-NEW_IP=$(get_new_ip) || { echo "[!] Error: Unable to fetch current IP after multiple attempts."; exit 1; }
+NEW_IP=$(get_new_ip) || { echo "[!] Error: Unable to fetch current IP after multiple attempts." >&2; exit 1; }
 OLD_IP=$(old_ip)
 
 if [ "$OLD_IP" != "$NEW_IP" ]; then
@@ -134,7 +134,7 @@ if [ "$OLD_IP" != "$NEW_IP" ]; then
         save_ip "$NEW_IP"
         echo "[+] Success: MAM IP updated to $NEW_IP"
     else
-        echo "[!] Error: MAM IP update failed. Exhausted retries."
+        echo "[!] Error: MAM IP update failed. Exhausted retries." >&2
         exit 1
     fi
 else
