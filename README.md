@@ -3,7 +3,7 @@
 This repository contains scripts for automating interactions with MyAnonaMouse. Each script is configurable via environment variables and designed for containerised environments (Docker, Kubernetes, etc.).
 
 > **Container Image:**
-> These scripts are currently provided as-is and you're welcome to include them in your own docker container solution. I shall be putting together a prebuilt multi-purpose image in due time and will update this repo once that's available.
+> These scripts are currently provided as-is and you're welcome to include them in your own docker container solution. A prebuilt image is available at [ghcr.io/cbrherms/mam-scripts](https://ghcr.io/cbrherms/mam-scripts)
 
 ## Scripts
 
