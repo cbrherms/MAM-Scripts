@@ -131,24 +131,77 @@ update_mam_id() {
 
 request_manager() {
     local url="$1" method="$2" query="$3" json_payload="$4"
-    local header_file cookie_header http_response http_code response
+    local header_file http_response http_code response
+    local max_retries=3
+    local attempt success
     header_file=$(mktemp)
-    cookie_header="mam_id=${MAM_ID}"
 
-    if [ "$method" == "get" ]; then
-        http_response=$(curl -s -w "\n%{http_code}" -G -D "$header_file" -H "cookie: $cookie_header" --data "$query" "$url")
-    elif [ "$method" == "post" ]; then
-        http_response=$(curl -s -w "\n%{http_code}" -D "$header_file" -X POST -H "cookie: $cookie_header" \
-             -H "Content-Type: application/json" -d "$json_payload" "$url")
-    fi
+    # Try with cookie file first (up to 3 attempts)
+    success=0
+    for attempt in $(seq 1 $max_retries); do
+        if [ "$method" == "get" ]; then
+            http_response=$(curl -s -w "\n%{http_code}" -G -D "$header_file" \
+                -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+                --data "$query" "$url")
+        elif [ "$method" == "post" ]; then
+            http_response=$(curl -s -w "\n%{http_code}" -D "$header_file" -X POST \
+                -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+                -H "Content-Type: application/json" -d "$json_payload" "$url")
+        fi
 
-    http_code=$(echo "$http_response" | tail -n1)
-    response=$(echo "$http_response" | sed '$d')
+        http_code=$(echo "$http_response" | tail -n1)
+        response=$(echo "$http_response" | sed '$d')
 
-    if [ "$http_code" != "200" ]; then
-        echo " => Error communicating with API. HTTP status code: $http_code" >&2
-        rm "$header_file"
-        exit 1
+        if [ "$http_code" = "200" ] && ! echo "$response" | grep -q "not signed in\|Invalid session"; then
+            success=1
+            break
+        else
+            echo " => Attempt $attempt with cookie file failed. Retrying in 5 seconds..." >&2
+            if [ $attempt -lt $max_retries ]; then
+                sleep 5
+            fi
+        fi
+    done
+
+    # If cookie file failed, try with MAM_ID (up to 3 attempts)
+    if [ $success -eq 0 ]; then
+        echo " => Cookie session invalid, attempting with MAM_ID..." >&2
+        if [ "$MAM_ID" = "default" ]; then
+            echo " => Error: No valid session and MAM_ID not set" >&2
+            rm "$header_file"
+            exit 1
+        fi
+        
+        for attempt in $(seq 1 $max_retries); do
+            if [ "$method" == "get" ]; then
+                http_response=$(curl -s -w "\n%{http_code}" -G -D "$header_file" \
+                    -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
+                    --data "$query" "$url")
+            elif [ "$method" == "post" ]; then
+                http_response=$(curl -s -w "\n%{http_code}" -D "$header_file" -X POST \
+                    -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
+                    -H "Content-Type: application/json" -d "$json_payload" "$url")
+            fi
+            
+            http_code=$(echo "$http_response" | tail -n1)
+            response=$(echo "$http_response" | sed '$d')
+            
+            if [ "$http_code" = "200" ] && ! echo "$response" | grep -q "not signed in\|Invalid session"; then
+                success=1
+                break
+            else
+                echo " => Attempt $attempt with MAM_ID failed. Retrying in 5 seconds..." >&2
+                if [ $attempt -lt $max_retries ]; then
+                    sleep 5
+                fi
+            fi
+        done
+        
+        if [ $success -eq 0 ]; then
+            echo " => Error: Failed to establish session after all retry attempts. HTTP status code: $http_code" >&2
+            rm "$header_file"
+            exit 1
+        fi
     fi
 
     update_mam_id "$header_file"
@@ -318,7 +371,6 @@ download_candidate_torrents() {
             sleep 3
             header_file=$(mktemp)
             body_file=$(mktemp)
-            cookie_header="mam_id=${MAM_ID}"
             
             # Retry logic for curl command
             local retry=0
@@ -326,7 +378,8 @@ download_candidate_torrents() {
             local curl_response http_code
             while [ $retry -lt $max_retries ]; do
                 curl_response=$(curl -s -w "\n%{http_code}" -G -D "$header_file" \
-                              -H "cookie: $cookie_header" --data "tid=${torrent_id}" "$url" \
+                              -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+                              --data "tid=${torrent_id}" "$url" \
                               -o "$body_file")
                 http_code=$(echo "$curl_response" | tail -n1)
                 if [ "$http_code" -eq 200 ]; then

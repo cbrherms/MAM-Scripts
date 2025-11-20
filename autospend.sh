@@ -31,24 +31,58 @@ check_workdir_permissions() {
     fi
 }
 
+# check_cookie_session: Sets up session.
+# Also retrieves USER_ID dynamically.
 check_cookie_session() {
     echo " => Checking existing cookie file..."
-    USER_ID=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
-        https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
+    local max_retries=3
+    local attempt success response
     
-    if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
+    # Try with cookie file first (up to 3 attempts)
+    success=0
+    for attempt in $(seq 1 $max_retries); do
+        response=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+            https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
+        USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
+        
+        if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
+            success=1
+            break
+        else
+            echo " => Attempt $attempt with cookie file failed. Retrying in 5 seconds..." >&2
+            if [ $attempt -lt $max_retries ]; then
+                sleep 5
+            fi
+        fi
+    done
+    
+    # If cookie file failed, try with MAM_ID (up to 3 attempts)
+    if [ $success -eq 0 ]; then
         echo " => Session no longer valid"
-        if [ "$MAM_ID" = "default"  ]; then
+        if [ "$MAM_ID" = "default" ]; then
             echo " => Please add/update the MAM_ID value." >&2
             exit 1
         fi
         
         echo " => Attempting to create a new session with MAM_ID..."
-        USER_ID=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
-            https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
+        for attempt in $(seq 1 $max_retries); do
+            response=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
+                https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
+            USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
+            
+            if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
+                success=1
+                break
+            else
+                echo " => Attempt $attempt with MAM_ID failed. Retrying in 5 seconds..." >&2
+                if [ $attempt -lt $max_retries ]; then
+                    sleep 5
+                fi
+            fi
+        done
         
-        if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
-            echo " => Cannot create new session!" >&2
+        if [ $success -eq 0 ]; then
+            echo " => Cannot create new session after all retry attempts!" >&2
             echo " => Check your MAM_ID has been set correctly" >&2
             exit 1
         else
@@ -62,7 +96,7 @@ check_cookie_session() {
 get_current_points() {
     POINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
         https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID} | jq '.seedbonus')
-    if [ $? -ne 0 ]; then
+    if [ $? -ne 0 ] || [ -z "$POINTS" ] || [ "$POINTS" = "null" ]; then
         echo " => Failed to get number of bonus points - aborting." >&2
         exit 1
     else
@@ -88,16 +122,17 @@ buy_wedge() {
 }
 
 maximize_vip() {
-    VIPUNTIL=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID}" | jq -r .vip_until)
-    now=$(date -u +%s)
-    VIP_UNTIL_EPOCH=$(date -u -d "$VIPUNTIL" +%s 2>/dev/null)
+    VIPUNTIL=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+        "https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID}" | jq -r .vip_until)
     
-    if [ $? -ne 0 ]; then
-        echo " => Failed to parse the date VIP expires. Proceeding with VIP purchase..."
+    if [ $? -ne 0 ] || [ -z "$VIPUNTIL" ] || [ "$VIPUNTIL" = "null" ]; then
+        echo " => Failed to parse vip_until date. Proceeding with VIP purchase..."
     else
-        DAYS_LEFT=$(( (VIP_UNTIL_EPOCH - now) / 86400 ))
+        NOW=$(date -u +%s)
+        VIP_UNTIL_EPOCH=$(date -u -d "$VIPUNTIL" +%s 2>/dev/null)
+        DAYS_LEFT=$(( (VIP_UNTIL_EPOCH - NOW + 86399) / 86400 ))
         if [ $DAYS_LEFT -gt 60 ]; then
-            echo " => VIP has $DAYS_LEFT days remaining. Skipping VIP purchase until this drops below 60 days."
+            echo " => VIP active for $DAYS_LEFT days. Skipping VIP purchase until this drops below 60 days."
             return
         fi
     fi
