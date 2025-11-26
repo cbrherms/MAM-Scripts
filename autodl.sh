@@ -65,26 +65,55 @@ check_workdir_permissions() {
     fi
 }
 
-# check_cookie_session: Sets up session.
-# Also retrieves USER_ID dynamically.
+# check_cookie_session: Validates or creates a session and sets USER_ID.
 check_cookie_session() {
     echo " => Checking existing cookie file..."
-    USER_ID=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
-        https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
-    
-    if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
+    local max_retries=3
+    local attempt success response
+
+    success=0
+    for attempt in $(seq 1 $max_retries); do
+        response=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
+            https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
+        USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
+
+        if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
+            success=1
+            break
+        else
+            echo " => Attempt $attempt with cookie file failed. Retrying in 5 seconds..." >&2
+            if [ $attempt -lt $max_retries ]; then
+                sleep 5
+            fi
+        fi
+    done
+
+    if [ $success -eq 0 ]; then
         echo " => Session no longer valid"
-        if [ "$MAM_ID" = "default"  ]; then
+        if [ "$MAM_ID" = "default" ]; then
             echo " => Please add/update the MAM_ID value." >&2
             exit 1
         fi
-        
+
         echo " => Attempting to create a new session with MAM_ID..."
-        USER_ID=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
-            https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json" | jq .uid 2>/dev/null)
-        
-        if [ -z "$USER_ID" ] || [ "${USER_ID}x" = "x" ]; then
-            echo " => Cannot create new session!" >&2
+        for attempt in $(seq 1 $max_retries); do
+            response=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
+                https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
+            USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
+
+            if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
+                success=1
+                break
+            else
+                echo " => Attempt $attempt with MAM_ID failed. Retrying in 5 seconds..." >&2
+                if [ $attempt -lt $max_retries ]; then
+                    sleep 5
+                fi
+            fi
+        done
+
+        if [ $success -eq 0 ]; then
+            echo " => Cannot create new session after all retry attempts!" >&2
             echo " => Check your MAM_ID has been set correctly" >&2
             exit 1
         else
@@ -124,7 +153,6 @@ update_mam_id() {
     local header_file="$1"
     new_mam_id=$(grep -i "set-cookie:" "$header_file" | grep -oE 'mam_id=[^;]+' | cut -d'=' -f2)
     if [ -n "$new_mam_id" ]; then
-        echo "$new_mam_id" > "$COOKIE_FILE"
         MAM_ID="$new_mam_id"
     fi
 }
