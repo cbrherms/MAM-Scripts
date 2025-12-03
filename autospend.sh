@@ -153,8 +153,8 @@ spend_upload() {
         while [ $POINTS -gt $UPLOADREQUIRED ]; do
             echo " => Buying ${i}G of upload..."
             NEWPOINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
-                ${POINTSURL}${i}'&_='${TIMESTAMP} | jq '.seedbonus' | sed -e 's/\..*$//')
-            if [ $? -ne 0 ]; then
+                ${POINTSURL}${i}'&_='${TIMESTAMP} | jq -r '.seedbonus' | sed -e 's/\..*$//')
+            if [ $? -ne 0 ] || [ -z "$NEWPOINTS" ] || [ "$NEWPOINTS" = "null" ]; then
                 echo " => Spend failed - cannot see new Bonus points." >&2
                 exit 1
             fi
