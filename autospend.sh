@@ -148,7 +148,7 @@ maximize_vip() {
 }
 
 spend_upload() {
-    for i in 100 20 5 1; do
+    for i in 100 50; do
         UPLOADREQUIRED=$(expr $i \* 500 + ${POINTS_BUFFER})
         while [ $POINTS -gt $UPLOADREQUIRED ]; do
             echo " => Buying ${i}G of upload..."
