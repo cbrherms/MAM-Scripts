@@ -17,6 +17,7 @@ POINTSURL='https://www.myanonamouse.net/json/bonusBuy.php/?spendtype=upload&amou
 VIPURL='https://www.myanonamouse.net/json/bonusBuy.php/?spendtype=VIP&duration=max&_='
 WEDGEURL='https://www.myanonamouse.net/json/bonusBuy.php/?spendtype=wedges&source=points&_= '
 TIMESTAMP=$(date +%s%3N)
+VIP_UNTIL=""
 
 ###################################
 # Functions
@@ -31,20 +32,19 @@ check_workdir_permissions() {
     fi
 }
 
-# check_cookie_session: Sets up session.
-# Also retrieves USER_ID dynamically.
+# check_cookie_session: Sets up session and captures USER_ID, POINTS, and VIP_UNTIL.
 check_cookie_session() {
     echo " => Checking existing cookie file..."
     local max_retries=3
     local attempt success response
-    
+
     # Try with cookie file first (up to 3 attempts)
     success=0
     for attempt in $(seq 1 $max_retries); do
         response=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
             https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
         USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
-        
+
         if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
             success=1
             break
@@ -55,7 +55,7 @@ check_cookie_session() {
             fi
         fi
     done
-    
+
     # If cookie file failed, try with MAM_ID (up to 3 attempts)
     if [ $success -eq 0 ]; then
         echo " => Session no longer valid"
@@ -63,13 +63,13 @@ check_cookie_session() {
             echo " => Please add/update the MAM_ID value." >&2
             exit 1
         fi
-        
+
         echo " => Attempting to create a new session with MAM_ID..."
         for attempt in $(seq 1 $max_retries); do
             response=$(curl -s -b "mam_id=${MAM_ID}" -c "$COOKIE_FILE" \
                 https://www.myanonamouse.net/jsonLoad.php | tee "/tmp/MAM.json")
             USER_ID=$(echo "$response" | jq -r .uid 2>/dev/null)
-            
+
             if [ -n "$USER_ID" ] && [ "${USER_ID}x" != "x" ] && [ "$USER_ID" != "null" ]; then
                 success=1
                 break
@@ -80,7 +80,7 @@ check_cookie_session() {
                 fi
             fi
         done
-        
+
         if [ $success -eq 0 ]; then
             echo " => Cannot create new session after all retry attempts!" >&2
             echo " => Check your MAM_ID has been set correctly" >&2
@@ -91,11 +91,23 @@ check_cookie_session() {
     else
         echo " => Existing session valid"
     fi
+
+    # Capture POINTS and VIP_UNTIL from the session response (no extra API call needed)
+    POINTS=$(echo "$response" | jq -r '.seedbonus // empty' | sed -e 's/\..*$//')
+    VIP_UNTIL=$(echo "$response" | jq -r '.vip_until // empty')
+    if [ -z "$POINTS" ] || [ "$POINTS" = "null" ]; then
+        echo " => Failed to get bonus points from session response - aborting." >&2
+        exit 1
+    fi
+    echo " => Current points: $POINTS"
+    if [ -n "$VIP_UNTIL" ] && [ "$VIP_UNTIL" != "null" ]; then
+        echo " => VIP active until: $VIP_UNTIL"
+    fi
 }
 
 get_current_points() {
     POINTS=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
-        https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID} | jq '.seedbonus')
+        https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID} | jq '.seedbonus' | sed -e 's/\..*$//')
     if [ $? -ne 0 ] || [ -z "$POINTS" ] || [ "$POINTS" = "null" ]; then
         echo " => Failed to get number of bonus points - aborting." >&2
         exit 1
@@ -115,26 +127,22 @@ buy_wedge() {
         fi
         curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" "$WEDGEURL"
         touch "${WORKDIR}/wedge.last"
-        get_current_points
     else
         echo " => Wedge already purchased in the last $WEDGEHOURS hours."
     fi
 }
 
 maximize_vip() {
-    VIPUNTIL=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
-        "https://www.myanonamouse.net/jsonLoad.php?id=${USER_ID}" | jq -r .vip_until)
-    
-    if [ $? -ne 0 ] || [ -z "$VIPUNTIL" ] || [ "$VIPUNTIL" = "null" ]; then
-        echo " => Failed to parse vip_until date. Proceeding with VIP purchase..."
-    else
+    if [ -n "$VIP_UNTIL" ] && [ "$VIP_UNTIL" != "null" ]; then
         NOW=$(date -u +%s)
-        VIP_UNTIL_EPOCH=$(date -u -d "$VIPUNTIL" +%s 2>/dev/null)
+        VIP_UNTIL_EPOCH=$(date -u -d "$VIP_UNTIL" +%s 2>/dev/null)
         DAYS_LEFT=$(( (VIP_UNTIL_EPOCH - NOW + 86399) / 86400 ))
         if [ $DAYS_LEFT -gt 60 ]; then
             echo " => VIP active for $DAYS_LEFT days. Skipping VIP purchase until this drops below 60 days."
             return
         fi
+    else
+        echo " => VIP expiry unknown. Proceeding with VIP purchase..."
     fi
 
     VIPRESULT=$(curl -s -b "$COOKIE_FILE" -c "$COOKIE_FILE" \
@@ -143,6 +151,8 @@ maximize_vip() {
         echo " => VIP purchase failed!" >&2
     else
         echo " => Purchased max VIP with points available"
+        echo " => Waiting before refreshing points balance..."
+        sleep 62
         get_current_points
     fi
 }
@@ -166,7 +176,6 @@ spend_upload() {
             fi
         done
     done
-    get_current_points
 }
 
 ###################################
@@ -183,10 +192,6 @@ echo
 
 echo "[*] Checking session status..."
 check_cookie_session
-echo
-
-echo "[*] Retrieving current bonus points..."
-get_current_points
 STARTING_POINTS=$POINTS
 echo
 
